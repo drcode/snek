@@ -1,9 +1,11 @@
 (ns snek.core
-  (:refer-clojure
-   :rename {defn   core-defn
-            update core-update})
+  (:refer-clojure :rename
+                  {defn      core-defn
+                   defmethod core-defmethod
+                   update    core-update})
   (:require [clojure.set :as st]
-            [clojure.test :as te]))
+            [clojure.test :as te]
+            [fbc-utils.debug :refer [??]]))
 
 (def lazy-depth 10)
 
@@ -12,7 +14,7 @@
                  (set? k)  :set
                  (coll? k) :coll
                  (fn? k)   :fn
-                 :else     :default))
+                 :else     :other))
 
 (defmulti mismatch
   (fn [x y]
@@ -24,48 +26,58 @@
            (when (seq coll)
              coll))
 
-(defmethod mismatch [:map :map]
-  [ref data]
-  (nil-if-empty (into {}
-                      (keep (fn [[k v]]
-                              (if (and (= (typ k) :default) (not (magic-values k)))
-                                (let [inner (mismatch v (data k))]
-                                  (when-not (and (contains? data k) (not inner))
-                                    {k inner}))
-                                (when-let [g (nil-if-empty (into {}
-                                                                 (keep (fn [[k2 v2]]
-                                                                         (when (not (mismatch k k2))
-                                                                           (let [inner (mismatch v v2)]
-                                                                             (when inner
-                                                                               {k2 inner}))))
-                                                                       data)))]
-                                  {k g})))
-                            ref))))
+(core-defn optional-key [key]
+           (when (keyword? key)
+             (when-let [[_ s] (re-matches #"\?(.+)$" (name key))]
+               (keyword s))))
 
-(defmethod mismatch [:set :set]
+(core-defmethod mismatch [:map :map]
+                [ref data]
+                (nil-if-empty (into {}
+                                    (keep (fn [[k v]]
+                                            (cond (optional-key k)                                (let [k     (optional-key k)]
+                                                                                                    (when (contains? data k)
+                                                                                                      (let [inner (mismatch v (data k))]
+                                                                                                        (when-not (and (contains? data k) (not inner))
+                                                                                                          {k inner}))))
+
+                                                  (and (= (typ k) :other) (not (magic-values k))) (let [inner (mismatch v (data k))]
+                                                                                                    (when-not (and (contains? data k) (not inner))
+                                                                                                      {k inner}))
+                                                  :else                                           (when-let [g (nil-if-empty (into {}
+                                                                                                                                   (keep (fn [[k2 v2]]
+                                                                                                                                           (when (not (mismatch k k2))
+                                                                                                                                             (let [inner (mismatch v v2)]
+                                                                                                                                               (when inner
+                                                                                                                                                 {k2 inner}))))
+                                                                                                                                         data)))]
+                                                                                                    {k g})))
+                                          ref))))
+
+(core-defmethod mismatch [:set :set]
   [ref data]
   (nil-if-empty (set (keep (fn [k]
-                             (when (and (= (typ k) :default) (not (magic-values k)) (not (contains? data k)))
+                             (when (and (= (typ k) :other) (not (magic-values k)) (not (contains? data k)))
                                k))
                            ref))))
 
-(defmethod mismatch [:set :default]
+(core-defmethod mismatch [:set :other]
   [ref data]
   ref)
 
-(defmethod mismatch [:default :map]
+(core-defmethod mismatch [:other :map]
   [ref data]
   ref)
 
-(defmethod mismatch [:set :map]
+(core-defmethod mismatch [:set :map]
   [ref data]
   ref)
 
-(defmethod mismatch [:map :coll]
+(core-defmethod mismatch [:map :coll]
   [ref data]
   ref)
 
-(defmethod mismatch [:default :default]
+(core-defmethod mismatch [:other :other]
   [ref data]
   (cond (nil? ref)    nil
         (= ref 0)     (when-not (number? data)
@@ -76,10 +88,10 @@
                         ref)
         (= ref false) (when-not (boolean? data)
                         ref)
-        :default      (when-not (= ref data)
+        :other      (when-not (= ref data)
                         ref)))
 
-(defmethod mismatch [:coll :coll]
+(core-defmethod mismatch [:coll :coll]
   [ref data]
   (cond (= (count ref) 1)            (nil-if-empty (keep (partial mismatch (first ref)) (take lazy-depth data))) ;;cap at 100 because of infinite lists
         (= (count ref) (count data)) (nil-if-empty (keep (fn [[ref data]]
@@ -90,19 +102,27 @@
                                              (coll? item) []
                                              :else        item))))
 
-(defmethod mismatch [:coll :default]
-  [ref data]
-  ref)
+(core-defmethod mismatch [:coll :other]
+                [ref data]
+                ref)
 
-(defmethod mismatch [:default :coll]
-  [ref data]
-  ref)
+(core-defmethod mismatch [:other :fn]
+                [ref data]
+                ref)
 
-(defmethod mismatch [:map :default]
-  [ref data]
-  ref)
+(core-defmethod mismatch [:other :coll]
+                [ref data]
+                ref)
 
-(defmethod mismatch [:coll :map]
+(core-defmethod mismatch [:coll :set]
+                [ref data]
+                ref)
+
+(core-defmethod mismatch [:map :other]
+                [ref data]
+                ref)
+
+(core-defmethod mismatch [:coll :map]
   [ref data]
   ref)
 
@@ -113,7 +133,7 @@
   (fn [x y]
     (mapv typ [x y])))
 
-(defmethod generalize [:default :default]
+(core-defmethod generalize [:other :other]
 [ref data]
 (cond (nil? ref)    nil
       (= ref 0)     (when (number? data)
@@ -124,14 +144,14 @@
                       :_)
       (= ref false) (when (boolean? data)
                       :_)
-      :default      (cond (= ref data)                         ref
+      :other      (cond (= ref data)                         ref
                           (and (number? ref) (number? data))   0
                           (and (string? ref) (string? data))   ""
                           (and (keyword? ref) (keyword? data)) :_
                           (and (boolean? ref) (boolean? ref))  false
                           :else                                nil)))
 
-(defmethod generalize [:coll :coll]
+(core-defmethod generalize [:coll :coll]
   [ref data]
   (let [ref  (take lazy-depth ref)
         data (take lazy-depth data)]
@@ -145,7 +165,7 @@
 (core-defn coll-snek-type? [o]
            (and (not (map? o)) (coll? o)))
 
-(defmethod generalize [:set :set]
+(core-defmethod generalize [:set :set]
   [ref data]
   (let [ref-keys     ref
         data-keys    data
@@ -172,7 +192,7 @@
       wild-boolean (conj false)
       wild-coll    (conj (reduce generalize (filter coll-snek-type? all-keys))))))
 
-(defmethod generalize [:map :map]
+(core-defmethod generalize [:map :map]
   [ref data]
   (let [ref-keys     (set (keys ref))
         data-keys    (set (keys data))
@@ -201,94 +221,97 @@
       wild-boolean (assoc false (wild boolean?))
       wild-coll    (assoc (reduce generalize (filter coll-snek-type? all-keys)) (wild coll-snek-type?)))))
 
-(defmethod generalize [:coll :default]
+(core-defmethod generalize [:coll :other]
   [ref data]
   nil)
 
-(defmethod generalize [:default :coll]
+(core-defmethod generalize [:other :coll]
   [ref data]
   nil)
 
-(defmethod generalize [:default :map]
-  [ref data]
-  nil)
+(core-defmethod generalize [:other :map]
+                [ref data]
+                nil)
 
 (defmulti query
   (fn [x y]
     (mapv typ [x y])))
 
-(defmethod query [:default :map]
-  [ref data]
-  (if ref
-    (data ref)
-    data))
+(core-defmethod query [:other :map]
+                [ref data]
+                (if ref
+                  (data ref)
+                  data))
 
-(defmethod query [:default :coll]
-  [ref data]
-  (if ref
-    (data ref)
-    data))
+(core-defmethod query [:other :coll]
+                [ref data]
+                (if ref
+                  (data ref)
+                  data))
 
-(defmethod query [:default :set]
-  [ref data]
-  (if ref
-    (data ref)
-    data))
+(core-defmethod query [:other :set]
+                [ref data]
+                (if ref
+                  (data ref)
+                  data))
 
-(defmethod query [:coll :map]
-  [ref data]
-  (vec (for [item ref]
-         (query item data))))
+(core-defmethod query [:coll :map]
+                [ref data]
+                (vec (for [item ref]
+                       (query item data))))
 
-(defmethod query [:map :map]
-  [ref data]
-  (into {}
-        (keep (fn [[k v]]
-                (reduce (fn [acc [kref vref :as item]]
-                          (if (valid? kref k)
-                            (let [[k v] (or acc [k v])]
-                              [k (query vref v)])
-                            acc))
-                        nil
-                        ref))
-              data)))
+(core-defmethod query [:map :map]
+                [ref data]
+                (doseq [[k v] ref]
+                  (when (and (not (or (nil? k) (magic-values k))) (not (contains? data k)))
+                    (throw (ex-info (str "Missing query key " (pr-str k) " in data") {}))))
+                (into {}
+                      (keep (fn [[k v]]
+                              (reduce (fn [acc [kref vref :as item]]
+                                        (if (valid? kref k)
+                                          (let [[k v] (or acc [k v])]
+                                            [k (query vref v)])
+                                          acc))
+                                      nil
+                                      ref))
+                            data)))
 
-(defmethod query [:set :set]
-  [ref data]
-  (set (filter (fn [item]
-                 (some #(valid? % item) ref))
-               data)))
+(core-defmethod query [:set :set]
+                [ref data]
+                (set (filter (fn [item]
+                               (some #(valid? % item) ref))
+                             data)))
 
-(defmethod query [:default :default]
-  [ref data]
-  (when (valid? ref data)
-    data))
+(core-defmethod query [:other :other]
+                [ref data]
+                (when (valid? ref data)
+                  data))
 
-(defmethod query [:coll :coll]
-  [ref data]
-  (vec (if (= (count ref) 1)
-         (for [item data]
-           (query (first ref) item))
-         (map query ref data))))
+(core-defmethod query [:coll :coll]
+                [ref data]
+                (vec (if (= (count ref) 1)
+                       (for [item data]
+                         (query (first ref) item))
+                       (map query ref data))))
 
 (defmulti update
   (fn [x y]
     (mapv typ [x y])))
 
-(defmethod update [:map :map]
-  [upd coll]
-  (reduce (fn [acc [k v :as item]]
-            (if (or (nil? k) (magic-values k))
-              (into {}
-                    (for [[k2 v2 :as item2] acc]
-                      (if (valid? k k2)
-                        [k2 (update v v2)]
-                        item2)))
-              (core-update acc k (partial update v))))
-          coll
-          upd))
+(core-defmethod update [:map :map]
+                [upd coll]
+                (reduce (fn [acc [k v :as item]]
+                          (if (or (nil? k) (magic-values k))
+                            (into {}
+                                  (for [[k2 v2 :as item2] acc]
+                                    (if (valid? k k2)
+                                      [k2 (update v v2)]
+                                      item2)))
+                            (core-update acc k (partial update v))))
+                        coll
+                        upd))
 
-(defmethod update [:coll :map]
+(core-defmethod update [:coll :map]
   [upd coll]
   (cond (= (count upd) 1) (into {}
                                 (map (partial update (first upd)) coll))
@@ -296,7 +319,7 @@
                                 (for [[k v] coll]
                                   [(update (first upd) k) (update (second upd) v)]))))
 
-(defmethod update [:map :coll]
+(core-defmethod update [:map :coll]
   [upd coll]
   (reduce (fn [acc [k v :as item]]
             (core-update acc
@@ -306,44 +329,64 @@
           coll
           upd))
 
-(defmethod update [:fn :default]
-  [upd coll]
-  (upd coll))
+(core-defmethod update [:fn :other]
+                [upd coll]
+                (upd coll))
 
-(defmethod update [:coll :coll]
-  [upd coll]
-  (cond-> (cond (= (count upd) 1)            (map (partial update (first upd)) coll)
-                (= (count coll) (count upd)) (map update upd coll)
-                :else                        upd)
-    (vector? coll) vec))
+(core-defmethod update [:coll :coll]
+                [upd coll]
+                (cond-> (cond (= (count upd) 1)            (map (partial update (first upd)) coll)
+                              (= (count coll) (count upd)) (map update upd coll)
+                              :else                        upd)
+                  (vector? coll) vec))
 
-(defmethod update [:default :default]
-  [upd coll]
-  upd)
+(core-defmethod update [:other :other]
+                [upd coll]
+                upd)
 
-(defmethod update [:fn :coll]
-  [upd coll]
-  (upd coll))
+(core-defmethod update [:fn :coll]
+                [upd coll]
+                (upd coll))
 
-(defmethod update [:fn :map]
-  [upd coll]
-  (upd coll))
+(core-defmethod update [:fn :map]
+                [upd coll]
+                (upd coll))
 
-(defmethod update [:coll :default]
-  [upd coll]
-  upd)
+(core-defmethod update [:coll :other]
+                [upd coll]
+                upd)
 
-(defmethod update [:map :default]
-  [upd coll]
-  (if coll
-    (throw (ex-info (str "Can't update map " upd " to atomic value " coll) {}))
-    (update {} upd)))
+(core-defmethod update [:map :other]
+                [upd coll]
+                (if coll
+                  (throw (ex-info (str "Can't update map " upd " to atomic value " coll) {}))
+                  (update {} upd)))
 
-(defmethod update [:default :map]
-  [upd coll]
-  (if (keyword? upd)
-    (coll upd)
-    (throw (ex-info (str "Can't update arbitrary value " upd " against map " coll) {}))))
+(core-defmethod update [:other :map]
+                [upd coll]
+                (if (keyword? upd)
+                  (coll upd)
+                  (throw (ex-info (str "Can't update arbitrary value " upd " against map " coll) {}))))
+
+(defmulti instance typ)
+
+(core-defmethod instance :map
+                [ref]
+                (into {}
+                      (keep (fn [[k v]]
+                              (when-not (magic-values k)
+                                [k (instance v)]))
+                            ref)))
+
+(core-defmethod instance :coll
+                [ref]
+                (if (= (count ref) 1)
+                  []
+                  (mapv instance ref)))
+
+(core-defmethod instance :other
+                [ref]
+                ref)
 
 (def snek-type (atom nil))
 (def snek-debug (atom false))
@@ -390,40 +433,113 @@
              (when (not= v (@snek-declarations k))
                (println k ":" (raw-defsnek v)))))
 
-(defmethod te/assert-expr 'inferences-valid? [msg form]
-  `(let [failure# (when-let [[k#] (check-inferences @snek-inferences @snek-declarations)]
-                    k#)
-         result# (not failure#)]
-     (te/do-report 
-      {:type (if result# :pass :fail)
-       :message (str "Inferred snek for " (first failure#) " should match declaration")
-       :expected (raw-defsnek (second failure#))
-       :actual (raw-defsnek (@snek-declarations (first failure#)))})
-     result#))
+(core-defmethod te/assert-expr 'inferences-valid? [msg form]
+                `(let [failure# (when-let [[k#] (check-inferences @snek-inferences @snek-declarations)]
+                                  k#)
+                       result# (not failure#)]
+                   (te/do-report 
+                    {:type (if result# :pass :fail)
+                     :message (str "Inferred snek for " (first failure#) " should match declaration")
+                     :expected (raw-defsnek (second failure#))
+                     :actual (raw-defsnek (@snek-declarations (first failure#)))})
+                   result#))
+
+(core-defn restructure
+           "Takes an argument list and returns a string equivalent to the vector of all items in the argument list"
+           [args gensym]
+           (let [n    (count args)
+                 args (vec (for [arg args]
+                             (cond (map? arg)    (cond-> arg
+                                                   (not (:as arg)) (assoc :as (gensym)))
+                                   (vector? arg) (let [z (count arg)]
+                                                   (if (and (>= z 2) (= (arg (- z 2)) :as))
+                                                     arg
+                                                     (conj arg :as (gensym))))
+                                   :else         arg)))]
+             (if (and (>= n 2) (= (args (- n 2)) '&))
+               (let [[a b] (restructure (subvec args 0 (- n 2)) gensym)]
+                 `[~args
+                   (concat ~b ~(last args))])
+               `[~args
+                 (list ~@(for [arg args]
+                           (cond (map? arg)    (:as arg)
+                                 (vector? arg) (last arg)
+                                 :else         arg)))])))
+
+#_(defmacro defn [nam args & body] ;; todo: support docstrings
+    (let [raw-fun (symbol (str (name nam) "__"))]
+      `(if @snek-type
+         (let [[args-exp# result-exp#] @snek-type]
+           (swap! snek-declarations assoc '~nam [args-exp# result-exp#])
+           (declare ~nam)
+           (core-defn ~raw-fun ~args
+                      ~@body)
+           (core-defn ~nam [& args#]
+                      (do (when ~(identity @snek-debug)
+                            (println (pr-str (cons '~nam (butlast (query (conj args-exp# ::xtra) (conj (vec args#) ::xtra)))))))
+                          (when-let [delta# (mismatch (conj args-exp# ::xtra) (conj (vec args#) ::xtra))]
+                            (throw (ex-info (str "Snek argument error in " '~nam ": Expected " args-exp# " but got " args# ", delta " (pr-str delta#)) {})))
+                          (let [result# (apply ~raw-fun args#)]
+                            (when-let [delta# (mismatch result-exp# result#)]
+                              (throw (ex-info (str "Snek result error in " '~nam ": Expected " result-exp# " but got " result# ", delta " (pr-str delta#)) {})))
+                            #_(add-inference '~nam (vec args#) result#)
+                            (when ~(identity @snek-debug)
+                              (println '~nam "results =" (pr-str (query result-exp# result#))))
+                            result#)))
+           (reset! snek-type nil))
+         (core-defn ~nam ~args
+                    ~@body))))
 
 (defmacro defn [nam args & body] ;; todo: support docstrings
-  (let [raw-fun (symbol (str (name nam) "__"))]
+  (let [[args arg-list] (restructure args gensym)
+        raw-fun         (symbol (str (name nam) "__"))]
     `(if @snek-type
        (let [[args-exp# result-exp#] @snek-type]
          (swap! snek-declarations assoc '~nam [args-exp# result-exp#])
          (declare ~nam)
          (core-defn ~raw-fun ~args
                     ~@body)
-         (core-defn ~nam [& args#]
-                    (do (when ~(identity @snek-debug)
-                          (println (pr-str (cons '~nam (butlast (query (conj args-exp# ::xtra) (conj (vec args#) ::xtra)))))))
-                        (when-let [delta# (mismatch (conj args-exp# ::xtra) (conj (vec args#) ::xtra))]
-                          (throw (ex-info (str "Snek argument error in " '~nam ": Expected " args-exp# " but got " args# ", delta " (pr-str delta#)) {})))
-                        (let [result# (apply ~raw-fun args#)]
-                          (when-let [delta# (mismatch result-exp# result#)]
-                            (throw (ex-info (str "Snek result error in " '~nam ": Expected " result-exp# " but got " result# ", delta " (pr-str delta#)) {})))
-                          #_(add-inference '~nam (vec args#) result#)
-                          (when ~(identity @snek-debug)
-                            (println '~nam "results =" (pr-str (query result-exp# result#))))
-                          result#)))
+         (core-defn ~nam ~args
+                    (let [args# ~arg-list]
+                      (do (when ~(identity @snek-debug)
+                            (println (pr-str (cons '~nam (butlast (query (conj args-exp# ::xtra) (conj (vec args#) ::xtra)))))))
+                          (when-let [delta# (mismatch (conj args-exp# ::xtra) (conj (vec args#) ::xtra))]
+                            (throw (ex-info (str "Snek argument error in " '~nam ": Expected " args-exp# " but got " args# ", delta " (pr-str delta#)) {})))
+                          (let [result# (apply ~raw-fun args#)]
+                            (when-let [delta# (mismatch result-exp# result#)]
+                              (throw (ex-info (str "Snek result error in " '~nam ": Expected " result-exp# " but got " result# ", delta " (pr-str delta#)) {})))
+                            #_(add-inference '~nam (vec args#) result#)
+                            (when ~(identity @snek-debug)
+                              (println '~nam "results =" (pr-str (query result-exp# result#))))
+                            result#))))
          (reset! snek-type nil))
        (core-defn ~nam ~args
                   ~@body))))
+
+(defmacro defmethod [nam pattern args & body] ;; todo: support docstrings
+  (let [[args arg-list] (restructure args gensym)
+        raw-fun (symbol (str (name nam) "__" (name (gensym))))]
+    `(if @snek-type
+       (let [[args-exp# result-exp#] @snek-type]
+         (swap! snek-declarations assoc '~nam [args-exp# result-exp#])
+         (core-defn ~raw-fun ~args
+                    ~@body)
+         (core-defmethod ~nam ~pattern ~args
+                         (let [args# ~arg-list]
+                           (do (when ~(identity @snek-debug)
+                                 (println (pr-str (cons '~nam (butlast (query (conj args-exp# ::xtra) (conj (vec args#) ::xtra)))))))
+                               (when-let [delta# (mismatch (conj args-exp# ::xtra) (conj (vec args#) ::xtra))]
+                                 (throw (ex-info (str "Snek argument error in " '~nam ": Expected " args-exp# " but got " args# ", delta " (pr-str delta#)) {})))
+                               (let [result# (apply ~raw-fun args#)]
+                                 (when-let [delta# (mismatch result-exp# result#)]
+                                   (throw (ex-info (str "Snek result error in " '~nam ": Expected " result-exp# " but got " result# ", delta " (pr-str delta#)) {})))
+                                 #_(add-inference '~nam (vec args#) result#)
+                                 (when ~(identity @snek-debug)
+                                   (println '~nam "results =" (pr-str (query result-exp# result#))))
+                                 result#))))
+         (reset! snek-type nil))
+       (core-defmethod ~nam ~pattern ~args
+                       ~@body))))
 
 (core-defn snek [b]
            (defsnek))
