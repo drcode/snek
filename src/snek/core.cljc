@@ -1,10 +1,11 @@
-(ns snek.core
+o(ns snek.core
   (:refer-clojure :rename
                   {defn      core-defn
                    defmethod core-defmethod
                    update    core-update})
   (:require [clojure.set :as st]
             [clojure.test :as te]
+            [clojure.edn :as ed]
             [fbc-utils.debug :refer [??]]))
 
 (def lazy-depth 10)
@@ -86,6 +87,8 @@
                         ref)
         (= ref :_)    (when-not (keyword? data)
                         ref)
+        (= ref '_)    (when-not (symbol? data)
+                        ref)
         (= ref false) (when-not (boolean? data)
                         ref)
         :other      (when-not (= ref data)
@@ -142,6 +145,8 @@
                       "")
       (= ref :_)    (when (keyword? data)
                       :_)
+      (= ref '_)    (when (symbol? data)
+                      '_)
       (= ref false) (when (boolean? data)
                       :_)
       :other      (cond (= ref data)                         ref
@@ -388,6 +393,13 @@
                 [ref]
                 ref)
 
+(core-defn parse [template s]
+           (let [k (try (ed/read-string (str "[" s "]"))
+                        (catch Exception e
+                          nil))]
+             (when (valid? template k)
+               k)))
+
 (def snek-type (atom nil))
 (def snek-debug (atom false))
 
@@ -529,10 +541,10 @@
                            (do (when ~(identity @snek-debug)
                                  (println (pr-str (cons '~nam (butlast (query (conj args-exp# ::xtra) (conj (vec args#) ::xtra)))))))
                                (when-let [delta# (mismatch (conj args-exp# ::xtra) (conj (vec args#) ::xtra))]
-                                 (throw (ex-info (str "Snek argument error in " '~nam ": Expected " args-exp# " but got " args# ", delta " (pr-str delta#)) {})))
+                                 (throw (ex-info (str "Snek argument error in " '~nam " " ~pattern ": Expected " args-exp# " but got " args# ", delta " (pr-str delta#)) {})))
                                (let [result# (apply ~raw-fun args#)]
                                  (when-let [delta# (mismatch result-exp# result#)]
-                                   (throw (ex-info (str "Snek result error in " '~nam ": Expected " result-exp# " but got " result# ", delta " (pr-str delta#)) {})))
+                                   (throw (ex-info (str "Snek result error in " '~nam " " ~pattern ": Expected " result-exp# " but got " result# ", delta " (pr-str delta#)) {})))
                                  #_(add-inference '~nam (vec args#) result#)
                                  (when ~(identity @snek-debug)
                                    (println '~nam "results =" (pr-str (query result-exp# result#))))
