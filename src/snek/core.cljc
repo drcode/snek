@@ -570,7 +570,7 @@
                          ~@body))))
 
 (defmacro defmethod [nam pattern args & body] ;; todo: support docstrings
-  (defn-helper (str (name nam) "__" (name (gensym))) ['clojure.core/defmethod nam pattern] nam (str (name nam) " " ~pattern) args body))
+  (defn-helper (str (name nam) "__" (name (gensym))) ['clojure.core/defmethod nam pattern] nam (str (name nam) " " pattern) args body))
 
 (core-defn snek [b]
            (defsnek))
