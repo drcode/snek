@@ -6,6 +6,7 @@
   (:require [clojure.set :as st]
             [clojure.test :as te]
             [clojure.edn :as ed]
+            [clojure.pprint :as pp]
             [fbc-utils.debug :refer [??]]))
 
 (def lazy-depth 10)
@@ -379,7 +380,7 @@
                 [ref]
                 (into {}
                       (keep (fn [[k v]]
-                              (when-not (magic-values k)
+                              (when (and (not (magic-values k)) (not (optional-key k)))
                                 [k (instance v)]))
                             ref)))
 
@@ -388,6 +389,10 @@
                 (if (= (count ref) 1)
                   []
                   (mapv instance ref)))
+
+(core-defmethod instance :set
+                [ref]
+                #{})
 
 (core-defmethod instance :other
                 [ref]
@@ -482,56 +487,90 @@
                                  (vector? arg) (last arg)
                                  :else         arg)))])))
 
-(defmacro defn [nam args & body] ;; todo: support docstrings
-  (let [[args arg-list] (restructure args gensym)
-        raw-fun         (symbol (str (name nam) "__"))]
-    `(if @snek-type
-       (let [[args-exp# result-exp#] @snek-type]
-         (swap! snek-declarations assoc '~nam [args-exp# result-exp#])
-         (declare ~nam)
-         (core-defn ~raw-fun ~args
-                    ~@body)
+(core-defn defn-helper [raw-fun-sym declaration nam nam-human args body]
+           (let [[args arg-list] (restructure args gensym)
+                 raw-fun         (symbol raw-fun-sym)]
+             `(if @snek-type
+                (let [[args-exp# result-exp#] @snek-type
+                      err-fn#                 (fn [typ# a# b# delta#]
+                                                (throw (ex-info (str "Snek " typ# " error in " ~nam-human ".\n\nExpected:\n" (with-out-str (pp/pprint a#)) "\nActual:\n" (with-out-str (pp/pprint b#)) "\nDelta:\n" (with-out-str (pp/pprint delta#))) {})))]
+                  (swap! snek-declarations assoc '~nam [args-exp# result-exp#])
+                  (declare ~nam)
+                  (core-defn ~raw-fun ~args
+                             ~@body)
+                  (~@declaration
+                   ~args
+                   (let [args# ~arg-list]
+                     (do (when ~(identity @snek-debug)
+                           (println (pr-str (cons '~nam (butlast (query (conj args-exp# ::xtra) (conj (vec args#) ::xtra)))))))
+                         (when-let [delta# (mismatch (conj args-exp# ::xtra) (conj (vec args#) ::xtra))]
+                           (err-fn# "argument" args-exp# args# delta#))
+                         (let [result# (apply ~raw-fun args#)]
+                           (when-let [delta# (mismatch result-exp# result#)]
+                             (err-fn# "result" result-exp# result# delta#))
+                           #_(add-inference '~nam (vec args#) result#)
+                           (when ~(identity @snek-debug)
+                             (println '~nam-human "results =" (pr-str (query result-exp# result#))))
+                           result#))))
+                  (reset! snek-type nil))
+                (core-defn ~nam ~args ~@body))))
+
+#_(defmacro defn [nam args & body] ;; todo: support docstrings
+    (let [[args arg-list] (restructure args gensym)
+          raw-fun         (symbol (str (name nam) "__"))]
+      `(if @snek-type
+         (let [[args-exp# result-exp#] @snek-type]
+           (swap! snek-declarations assoc '~nam [args-exp# result-exp#])
+           (declare ~nam)
+           (core-defn ~raw-fun ~args
+                      ~@body)
+           (core-defn ~nam ~args
+                      (let [args# ~arg-list]
+                        (do (when ~(identity @snek-debug)
+                              (println (pr-str (cons '~nam (butlast (query (conj args-exp# ::xtra) (conj (vec args#) ::xtra)))))))
+                            (when-let [delta# (mismatch (conj args-exp# ::xtra) (conj (vec args#) ::xtra))]
+                              (throw (ex-info (str "Snek argument error in " '~nam ": Expected " args-exp# " but got " args# ", delta " (pr-str delta#)) {})))
+                            (let [result# (apply ~raw-fun args#)]
+                              (when-let [delta# (mismatch result-exp# result#)]
+                                (throw (ex-info (str "Snek result error in " '~nam "Expected " result-exp# " but got " result# ", delta " (pr-str delta#)) {})))
+                              #_(add-inference '~nam (vec args#) result#)
+                              (when ~(identity @snek-debug)
+                                (println '~nam "results =" (pr-str (query result-exp# result#))))
+                              result#))))
+           (reset! snek-type nil))
          (core-defn ~nam ~args
-                    (let [args# ~arg-list]
-                      (do (when ~(identity @snek-debug)
-                            (println (pr-str (cons '~nam (butlast (query (conj args-exp# ::xtra) (conj (vec args#) ::xtra)))))))
-                          (when-let [delta# (mismatch (conj args-exp# ::xtra) (conj (vec args#) ::xtra))]
-                            (throw (ex-info (str "Snek argument error in " '~nam ": Expected " args-exp# " but got " args# ", delta " (pr-str delta#)) {})))
-                          (let [result# (apply ~raw-fun args#)]
-                            (when-let [delta# (mismatch result-exp# result#)]
-                              (throw (ex-info (str "Snek result error in " '~nam ": Expected " result-exp# " but got " result# ", delta " (pr-str delta#)) {})))
-                            #_(add-inference '~nam (vec args#) result#)
-                            (when ~(identity @snek-debug)
-                              (println '~nam "results =" (pr-str (query result-exp# result#))))
-                            result#))))
-         (reset! snek-type nil))
-       (core-defn ~nam ~args
-                  ~@body))))
+                    ~@body))))
+
+(defmacro defn [nam args & body] ;; todo: support docstrings
+  (defn-helper (str (name nam) "__") ['clojure.core/defn nam] nam (name nam) args body))
+
+#_(defmacro defmethod [nam pattern args & body] ;; todo: support docstrings
+    (let [[args arg-list] (restructure args gensym)
+          raw-fun (symbol (str (name nam) "__" (name (gensym))))]
+      `(if @snek-type
+         (let [[args-exp# result-exp#] @snek-type]
+           (swap! snek-declarations assoc '~nam [args-exp# result-exp#])
+           (core-defn ~raw-fun ~args
+                      ~@body)
+           (core-defmethod ~nam ~pattern #d ~args
+                           (let [args# ~arg-list]
+                             (do (when ~(identity @snek-debug)
+                                   (println (pr-str (cons '~nam (butlast (query (conj args-exp# ::xtra) (conj (vec args#) ::xtra)))))))
+                                 (when-let [delta# (mismatch (conj args-exp# ::xtra) (conj (vec args#) ::xtra))]
+                                   (throw (ex-info (str "Snek argument error in " '~nam " " ~pattern ": Expected " args-exp# " but got " args# ", delta " (pr-str delta#)) {})))
+                                 (let [result# (apply ~raw-fun args#)]
+                                   (when-let [delta# (mismatch result-exp# result#)]
+                                     (throw (ex-info (str "Snek result error in " '~nam " " ~pattern ": Expected " result-exp# " but got " result# ", delta " (pr-str delta#)) {})))
+                                   #_(add-inference '~nam (vec args#) result#)
+                                   (when ~(identity @snek-debug)
+                                     (println '~nam "results =" (pr-str (query result-exp# result#))))
+                                   result#))))
+           (reset! snek-type nil))
+         (core-defmethod ~nam ~pattern ~args
+                         ~@body))))
 
 (defmacro defmethod [nam pattern args & body] ;; todo: support docstrings
-  (let [[args arg-list] (restructure args gensym)
-        raw-fun (symbol (str (name nam) "__" (name (gensym))))]
-    `(if @snek-type
-       (let [[args-exp# result-exp#] @snek-type]
-         (swap! snek-declarations assoc '~nam [args-exp# result-exp#])
-         (core-defn ~raw-fun ~args
-                    ~@body)
-         (core-defmethod ~nam ~pattern ~args
-                         (let [args# ~arg-list]
-                           (do (when ~(identity @snek-debug)
-                                 (println (pr-str (cons '~nam (butlast (query (conj args-exp# ::xtra) (conj (vec args#) ::xtra)))))))
-                               (when-let [delta# (mismatch (conj args-exp# ::xtra) (conj (vec args#) ::xtra))]
-                                 (throw (ex-info (str "Snek argument error in " '~nam " " ~pattern ": Expected " args-exp# " but got " args# ", delta " (pr-str delta#)) {})))
-                               (let [result# (apply ~raw-fun args#)]
-                                 (when-let [delta# (mismatch result-exp# result#)]
-                                   (throw (ex-info (str "Snek result error in " '~nam " " ~pattern ": Expected " result-exp# " but got " result# ", delta " (pr-str delta#)) {})))
-                                 #_(add-inference '~nam (vec args#) result#)
-                                 (when ~(identity @snek-debug)
-                                   (println '~nam "results =" (pr-str (query result-exp# result#))))
-                                 result#))))
-         (reset! snek-type nil))
-       (core-defmethod ~nam ~pattern ~args
-                       ~@body))))
+  (defn-helper (str (name nam) "__" (name (gensym))) ['clojure.core/defmethod nam pattern] nam (str (name nam) " " ~pattern) args body))
 
 (core-defn snek [b]
            (defsnek))

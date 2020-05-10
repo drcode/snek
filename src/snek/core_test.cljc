@@ -288,5 +288,7 @@
          (valid? {:?foo 0} {:foo "bar"})
          false
          (valid? {:foo 0} {:foo 4 :bar 2})
-         true)
+         true
+         (instance {:?foo 0 :bar 0})
+         {:bar 0})
 
