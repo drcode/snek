@@ -53,13 +53,13 @@
              (defn myadd2 [a b]
                (+ a b))
              (error-name-DELETE (myadd2 1 2)))
-         "clojure.lang.ExceptionInfo: Snek argument error in myadd2: Expected [0 :foo] but got (1 2), delta (:foo) {}"
+         "clojure.lang.ExceptionInfo: Snek argument error in myadd2.\n\nExpected:\n[0 :foo]\n\nActual:\n(1 2)\n\nDelta:\n(:foo)\n {}"          
          (do (defsnek)
              (defsnek 0 0 -> 0)
              (defn myadd3 [a b]
                :derp)
              (error-name-DELETE (myadd3 1 2)))
-         "clojure.lang.ExceptionInfo: Snek result error in myadd3: Expected 0 but got :derp, delta 0 {}"
+         "clojure.lang.ExceptionInfo: Snek result error in myadd3.\n\nExpected:\n0\n\nActual:\n:derp\n\nDelta:\n0\n {}"
          (valid? {:foo 0} {:health 5})
          false
          (valid? {:health 0} {:health 5})
