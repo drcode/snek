@@ -454,16 +454,16 @@
              (when (not= v (@snek-declarations k))
                (println k ":" (raw-defsnek v)))))
 
-(core-defmethod te/assert-expr 'inferences-valid? [msg form]
-                `(let [failure# (when-let [[k#] (check-inferences @snek-inferences @snek-declarations)]
-                                  k#)
-                       result# (not failure#)]
-                   (te/do-report 
-                    {:type (if result# :pass :fail)
-                     :message (str "Inferred snek for " (first failure#) " should match declaration")
-                     :expected (raw-defsnek (second failure#))
-                     :actual (raw-defsnek (@snek-declarations (first failure#)))})
-                   result#))
+#?(:clj (core-defmethod te/assert-expr 'inferences-valid? [msg form]
+                        `(let [failure# (when-let [[k#] (check-inferences @snek-inferences @snek-declarations)]
+                                          k#)
+                               result# (not failure#)]
+                           (te/do-report 
+                            {:type (if result# :pass :fail)
+                             :message (str "Inferred snek for " (first failure#) " should match declaration")
+                             :expected (raw-defsnek (second failure#))
+                             :actual (raw-defsnek (@snek-declarations (first failure#)))})
+                           result#)))
 
 (core-defn restructure
            "Takes an argument list and returns a string equivalent to the vector of all items in the argument list"
