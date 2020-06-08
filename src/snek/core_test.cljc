@@ -10,7 +10,7 @@
                      generalize
                      query
                      mismatch
-                     update
+                     modify
                      instance
                      optional-key
                      restructure
@@ -177,16 +177,16 @@
          {:a 3 :b :foo :c {:x 4 :y 2}}
          (mismatch [{:derp 4} 0] [{:size 4} 1 :attack])
          [{} 0]
-         (update {:foo inc} {:foo 1})
+         (modify {:foo inc} {:foo 1})
          {:foo 2}
-         (update {:foo {:bar inc}} {:foo {:bar 1}})
+         (modify {:foo {:bar inc}} {:foo {:bar 1}})
          {:foo {:bar 2}}
-         (update [inc] [1 2 3])
+         (modify [inc] [1 2 3])
          [2 3 4]
-         (update {:bar 2} {:foo 1})
+         (modify {:bar 2} {:foo 1})
          {:foo 1
           :bar 2}
-         (update {:bar (fn [k]
+         (modify {:bar (fn [k]
                          (if k
                            (inc k)
                            3))
@@ -194,35 +194,35 @@
                  {:foo 1})
          {:foo 2
           :bar 3}
-         (update {:foo [inc]} {:foo [1 2]})
+         (modify {:foo [inc]} {:foo [1 2]})
          {:foo [2 3]}
-         (update {nil inc}
+         (modify {nil inc}
                  {:foo 2
                   :bar 5})
          {:foo 3
           :bar 6}
-         (update {:foo inc}
+         (modify {:foo inc}
                  {:foo 1})
          {:foo 2}
-         (update {:foo [1 1 1]}
+         (modify {:foo [1 1 1]}
                  {})
          {:foo [1 1 1]}
-         (update {:foo [1 1 1]}
+         (modify {:foo [1 1 1]}
                  {:foo [0 0 0]})
          {:foo [1 1 1]}
-         (update {:foo [[inc]]}
+         (modify {:foo [[inc]]}
                  {:foo [[1 2 3] [5 6 7]]})
          {:foo [[2 3 4] [6 7 8]]}
-         (update [:foo] [{:foo 5} {:foo 3}])
+         (modify [:foo] [{:foo 5} {:foo 3}])
          [5 3]
-         (update :foo {:foo 3})
+         (modify :foo {:foo 3})
          3
-         (update {1 :derp} [:a :b :c])
+         (modify {1 :derp} [:a :b :c])
          [:a :derp :c]
-         (update {:db/id [1 0 0]}
+         (modify {:db/id [1 0 0]}
                  {:db/id [0 0 0]})
          {:db/id [1 0 0]}
-         (update {0 inc} {0 4 1 10})
+         (modify {0 inc} {0 4 1 10})
          {0 5
           1 11}
          (query {:size 0} {:size 8})
@@ -291,4 +291,6 @@
          true
          (instance {:?foo 0 :bar 0})
          {:bar 0})
+
+;;(typ nil)
 

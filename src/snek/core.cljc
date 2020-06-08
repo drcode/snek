@@ -300,75 +300,76 @@
                          (query (first ref) item))
                        (map query ref data))))
 
-(defmulti update
+(defmulti modify
   (fn [x y]
     (mapv typ [x y])))
 
-(core-defmethod update [:map :map]
+(core-defmethod modify [:map :map]
                 [upd coll]
                 (reduce (fn [acc [k v :as item]]
                           (if (or (nil? k) (magic-values k))
                             (into {}
                                   (for [[k2 v2 :as item2] acc]
                                     (if (valid? k k2)
-                                      [k2 (update v v2)]
+                                      [k2 (modify v v2)]
                                       item2)))
-                            (core-update acc k (partial update v))))
+                            (core-update acc k (partial modify v))))
                         coll
                         upd))
 
-(core-defmethod update [:coll :map]
-  [upd coll]
-  (cond (= (count upd) 1) (into {}
-                                (map (partial update (first upd)) coll))
-        (= (count upd) 2) (into {}
-                                (for [[k v] coll]
-                                  [(update (first upd) k) (update (second upd) v)]))))
 
-(core-defmethod update [:map :coll]
-  [upd coll]
-  (reduce (fn [acc [k v :as item]]
-            (core-update acc
-                         k
-                         (fn [g]
-                           (update v g))))
-          coll
-          upd))
+(core-defmethod modify [:coll :map]
+                [upd coll]
+                (cond (= (count upd) 1) (into {}
+                                              (map (partial modify (first upd)) coll))
+                      (= (count upd) 2) (into {}
+                                              (for [[k v] coll]
+                                                [(modify (first upd) k) (modify (second upd) v)]))))
 
-(core-defmethod update [:fn :other]
+(core-defmethod modify [:map :coll]
+                [upd coll]
+                (reduce (fn [acc [k v :as item]]
+                          (core-update acc
+                                       k
+                                       (fn [g]
+                                         (modify v g))))
+                        coll
+                        upd))
+
+(core-defmethod modify [:fn :other]
                 [upd coll]
                 (upd coll))
 
-(core-defmethod update [:coll :coll]
+(core-defmethod modify [:coll :coll]
                 [upd coll]
-                (cond-> (cond (= (count upd) 1)            (map (partial update (first upd)) coll)
-                              (= (count coll) (count upd)) (map update upd coll)
+                (cond-> (cond (= (count upd) 1)            (map (partial modify (first upd)) coll)
+                              (= (count coll) (count upd)) (map modify upd coll)
                               :else                        upd)
                   (vector? coll) vec))
 
-(core-defmethod update [:other :other]
+(core-defmethod modify [:other :other]
                 [upd coll]
                 upd)
 
-(core-defmethod update [:fn :coll]
+(core-defmethod modify [:fn :coll]
                 [upd coll]
                 (upd coll))
 
-(core-defmethod update [:fn :map]
+(core-defmethod modify [:fn :map]
                 [upd coll]
                 (upd coll))
 
-(core-defmethod update [:coll :other]
+(core-defmethod modify [:coll :other]
                 [upd coll]
                 upd)
 
-(core-defmethod update [:map :other]
+(core-defmethod modify [:map :other]
                 [upd coll]
                 (if coll
                   (throw (ex-info (str "Can't update map " upd " to atomic value " coll) {}))
-                  (update {} upd)))
+                  (modify {} upd)))
 
-(core-defmethod update [:other :map]
+(core-defmethod modify [:other :map]
                 [upd coll]
                 (if (keyword? upd)
                   (coll upd)
@@ -400,7 +401,7 @@
 
 (core-defn parse [template s]
            (let [k (try (ed/read-string (str "[" s "]"))
-                        (catch Exception e
+                        (catch #?(:clj Exception :cljs js/Object) e
                           nil))]
              (when (valid? template k)
                k)))
