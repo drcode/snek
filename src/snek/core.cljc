@@ -6,7 +6,9 @@
   (:require [clojure.set :as st]
             [clojure.test :as te]
             [clojure.edn :as ed]
-            [clojure.pprint :as pp]
+            [net.cgrand.macrovich :as mc]
+            #?(:clj [clojure.pprint :as pp]
+               :cljs [cljs.pprint :as pp])
             [fbc-utils.debug :refer [??]]))
 
 (def lazy-depth 10)
@@ -493,8 +495,10 @@
                  raw-fun         (symbol raw-fun-sym)]
              `(if @snek-type
                 (let [[args-exp# result-exp#] @snek-type
+                      pp-fun#                 (mc/case :clj  clojure.pprint/pprint
+                                                       :cljs cljs.pprint/pprint)
                       err-fn#                 (fn [typ# a# b# delta#]
-                                                (throw (ex-info (str "Snek " typ# " error in " ~nam-human ".\n\nExpected:\n" (with-out-str (pp/pprint a#)) "\nActual:\n" (with-out-str (pp/pprint b#)) "\nDelta:\n" (with-out-str (pp/pprint delta#))) {})))]
+                                                (throw (ex-info (str "Snek " typ# " error in " ~nam-human ".\n\nExpected:\n" (with-out-str (pp-fun# a#)) "\nActual:\n" (with-out-str (pp-fun# b#)) "\nDelta:\n" (with-out-str (pp-fun# delta#))) {})))]
                   (swap! snek-declarations assoc '~nam [args-exp# result-exp#])
                   (declare ~nam)
                   (core-defn ~raw-fun ~args

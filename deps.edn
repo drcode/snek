@@ -1,1 +1,2 @@
-{:deps {fbc-utils/fbc-utils {:local/root "../fbc-utils"}}}
+{:deps {fbc-utils/fbc-utils  {:local/root "../fbc-utils"}
+        net.cgrand/macrovich {:mvn/version "0.2.1"}}}
