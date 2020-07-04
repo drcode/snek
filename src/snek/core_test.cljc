@@ -290,7 +290,10 @@
          (valid? {:foo 0} {:foo 4 :bar 2})
          true
          (instance {:?foo 0 :bar 0})
-         {:bar 0})
+         {:bar 0}
+         (query {:?foo nil} {:?foo 5})
+         {:?foo 5}
+         )
 
 ;;(typ nil)
 
