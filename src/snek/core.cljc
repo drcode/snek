@@ -415,7 +415,7 @@
 (def snek-declarations (atom {}))
 
 (defmacro defsnek [& body]
-  (if (seq body)
+  (if (seq body) 
     (let [body     (vec body)
           num      (count body)
           args     (subvec body 0 (- num 2))
@@ -493,7 +493,7 @@
 (core-defn defn-helper [raw-fun-sym declaration nam nam-human args body]
            (let [[args arg-list] (restructure args gensym)
                  raw-fun         (symbol raw-fun-sym)]
-             `(if @snek-type
+             `(if (and @snek-type ~*assert*) ;;requires compiler-option "elide-asserts" to work in clojurescript
                 (let [[args-exp# result-exp#] @snek-type
                       pp-fun#                 (mc/case :clj  clojure.pprint/pprint
                                                        :cljs cljs.pprint/pprint)
