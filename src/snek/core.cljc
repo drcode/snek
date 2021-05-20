@@ -309,13 +309,18 @@
 (core-defmethod modify [:map :map]
                 [upd coll]
                 (reduce (fn [acc [k v :as item]]
-                          (if (or (nil? k) (magic-values k))
-                            (into {}
-                                  (for [[k2 v2 :as item2] acc]
-                                    (if (valid? k k2)
-                                      [k2 (modify v v2)]
-                                      item2)))
-                            (core-update acc k (partial modify v))))
+                          (cond (or (nil? k) (magic-values k)) (into {}
+                                                                     (for [[k2 v2 :as item2] acc]
+                                                                       (if (valid? k k2)
+                                                                         [k2 (modify v v2)]
+                                                                         item2)))
+                                (or (map? k) (fn? k))          (into {}
+                                                                     (for [[k2 v2 :as item2] acc]
+                                                                       [(modify k k2)
+                                                                        (if v
+                                                                          (modify v v2)
+                                                                          v2)]))
+                                :else                          (core-update acc k (partial modify v))))
                         coll
                         upd))
 
@@ -349,9 +354,17 @@
                               :else                        upd)
                   (vector? coll) vec))
 
+(core-defmethod modify [:coll :set]
+                [upd coll]
+                (set (cond (= (count upd) 1)            (map (partial modify (first upd)) coll)
+                           (= (count coll) (count upd)) (map modify upd coll)
+                           :else                        upd)))
+
 (core-defmethod modify [:other :other]
                 [upd coll]
-                upd)
+                (if (nil? upd)
+                  coll
+                  upd))
 
 (core-defmethod modify [:fn :coll]
                 [upd coll]

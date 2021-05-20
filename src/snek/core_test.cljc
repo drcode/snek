@@ -292,7 +292,12 @@
          (instance {:?foo 0 :bar 0})
          {:bar 0}
          (query {:?foo nil} {:?foo 5})
-         {:?foo 5})
+         {:?foo 5}
+         (modify {inc nil} {1 :foo 5 1000})
+         {2 :foo 6 1000}
+         (modify [inc] #{2 10 20})
+         #{21 3 11}
+         (modify [nil inc] [1 2]))
 
 ;;(typ nil)
 
