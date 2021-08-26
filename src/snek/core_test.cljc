@@ -297,7 +297,10 @@
          {2 :foo 6 1000}
          (modify [inc] #{2 10 20})
          #{21 3 11}
-         (modify [nil inc] [1 2]))
+         (modify [nil inc] [1 2])
+         [1 3]
+         (modify [nil inc] [{:a 1} 2])
+         [{:a 1} 3])
 
 ;;(typ nil)
 

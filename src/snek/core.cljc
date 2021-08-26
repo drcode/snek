@@ -386,9 +386,9 @@
 
 (core-defmethod modify [:other :map]
                 [upd coll]
-                (if (keyword? upd)
-                  (coll upd)
-                  (throw (ex-info (str "Can't update arbitrary value " upd " against map " coll) {}))))
+                (cond (keyword? upd) (coll upd)
+                      (nil? upd)     coll
+                      :else          (throw (ex-info (str "Can't update arbitrary value " upd " against map " coll) {}))))
 
 (defmulti instance typ)
 
