@@ -300,7 +300,9 @@
          (modify [nil inc] [1 2])
          [1 3]
          (modify [nil inc] [{:a 1} 2])
-         [{:a 1} 3])
+         [{:a 1} 3]
+         (modify [inc] '())
+         ())
 
 ;;(typ nil)
 
