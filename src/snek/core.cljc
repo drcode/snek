@@ -273,16 +273,19 @@
                 (doseq [[k v] ref]
                   (when (and (not (or (nil? k) (magic-values k))) (not (contains? data k)))
                     (throw (ex-info (str "Missing query key " (pr-str k) " in data") {}))))
-                (into {}
-                      (keep (fn [[k v]]
-                              (reduce (fn [acc [kref vref :as item]]
-                                        (if (valid? kref k)
-                                          (let [[k v] (or acc [k v])]
-                                            [k (query vref v)])
-                                          acc))
-                                      nil
-                                      ref))
-                            data)))
+                (let [result (into {}
+                                   (keep (fn [[k v]]
+                                           (reduce (fn [acc [kref vref :as item]]
+                                                     (if (valid? kref k)
+                                                       (let [[k v] (or acc [k v])]
+                                                         [k (query vref v)])
+                                                       acc))
+                                                   nil
+                                                   ref))
+                                         data))]
+                  (if (and (= (count ref) 1) (not (or (nil? (first (keys ref))) (magic-values (first (keys ref)))))) ;can lift the query result higher
+                    (result (first (keys ref)))
+                    result)))
 
 (core-defmethod query [:set :set]
                 [ref data]

@@ -156,7 +156,7 @@
          (query [4 :a] {4 :foo :a 1})
          [:foo 1]
          (query {:a nil} {:a 5 :b 3})
-         {:a 5}
+         5
          (query nil :foo)
          :foo
          (mismatch {:a 5 0 {:foo 5}} {:a 4 3 {:foo 5} 7 {:foo 3}})
@@ -226,13 +226,13 @@
          {0 5
           1 11}
          (query {:size 0} {:size 8})
-         {:size 8}
+         8
          (query 0 8)
          8
          (query [{:a nil}] [{:a 3 :b 6} {:a 7}])
-         [{:a 3} {:a 7}]
+         [3 7]
          (query [{:b nil} {:a nil}] [{:a 3 :b 6} {:a 7}])
-         [{:b 6} {:a 7}]
+         [6 7]
          (query #{1} #{1 2 4})
          #{1}
          (query #{0} #{1 2 4})
@@ -292,7 +292,7 @@
          (instance {:?foo 0 :bar 0})
          {:bar 0}
          (query {:?foo nil} {:?foo 5})
-         {:?foo 5}
+         5
          (modify {inc nil} {1 :foo 5 1000})
          {2 :foo 6 1000}
          (modify [inc] #{2 10 20})
