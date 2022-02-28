@@ -377,6 +377,10 @@
                 [upd coll]
                 (upd coll))
 
+(core-defmethod modify [:fn :set]
+                [upd coll]
+                (upd coll))
+
 (core-defmethod modify [:coll :other]
                 [upd coll]
                 upd)

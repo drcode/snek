@@ -302,7 +302,19 @@
          (modify [nil inc] [{:a 1} 2])
          [{:a 1} 3]
          (modify [inc] '())
-         ())
+         ()
+         (valid? false false)
+         true
+         (valid? false true)
+         true
+         (valid? true false)
+         false
+         (modify [inc] (list 1 2))
+         [2 3]
+         (modify {3 [count count]} [[] [] [] [#{:a} #{:b :c}]])
+         [[] [] [] [1 2]]
+         (modify {3 inc} [[] [] [] 3])
+         [[] [] [] 4])
 
 ;;(typ nil)
 
