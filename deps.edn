@@ -1,2 +1,3 @@
-{:deps {fbc-utils/fbc-utils  {:local/root "../fbc-utils"}
-        net.cgrand/macrovich {:mvn/version "0.2.1"}}}
+{:deps {io.github.drcode/fbc-utils {:git/tag "v0.0.1"
+                                    :git/sha "294d978"}
+        net.cgrand/macrovich       {:mvn/version "0.2.1"}}}
