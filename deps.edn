@@ -1,3 +1,3 @@
-{:deps {io.github.drcode/fbc-utils {:git/tag "v0.0.1"
-                                    :git/sha "294d978"}
+{:deps {io.github.drcode/fbc-utils {:git/tag "v0.0.3"
+                                    :git/sha "df91671"}
         net.cgrand/macrovich       {:mvn/version "0.2.1"}}}
