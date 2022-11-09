@@ -1,2 +1,2 @@
-{:deps {io.github.drcode/fbc-utils {:git/sha "2cef1be10cef30f79f75f03d18cd6f64af6fdcb4"}
+{:deps {io.github.drcode/fbc-utils {:git/sha "ee6470d1f9e525bbf0b381f05fa6926594d2d7b0"}
         net.cgrand/macrovich       {:mvn/version "0.2.1"}}}
