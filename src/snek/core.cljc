@@ -8,8 +8,7 @@
             [clojure.edn :as ed]
             [net.cgrand.macrovich :as mc]
             #?(:clj [clojure.pprint :as pp]
-               :cljs [cljs.pprint :as pp])
-            [fbc-utils.debug :refer [??]]))
+               :cljs [cljs.pprint :as pp])))
 
 (def lazy-depth 10)
 
