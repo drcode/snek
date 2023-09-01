@@ -304,6 +304,10 @@
                          (query (first ref) item))
                        (map query ref data))))
 
+(core-defmethod query [:map :other]
+                [ref data]
+                nil)
+
 (defmulti modify
   (fn [x y]
     (mapv typ [x y])))
